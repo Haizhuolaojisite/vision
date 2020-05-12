@@ -21,16 +21,25 @@ model_urls = {
 }
 
 
+#groups: 控制输入和输出之间的连接： group=1，输出是所有的输入的卷积；
+#group=2，此时相当于有并排的两个卷积层，每个卷积层计算输入通道的一半，并且产生的输出是输出通道的一半，随后将这两个输出连接起来。
+#dilation=1（也就是 padding）
+#第一个3*3的主要作用是在以后高维中做卷积提取信息
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=dilation, groups=groups, bias=False, dilation=dilation)
 
-
+#第二个1*1的作用主要是进行升降维的:怎么做到的
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+#这里bias设置为False,原因是：下面使用了Batch Normalization，而其对隐藏层有去均值的操作，所以这里的常数项可以消去  (还是有点不太明白)
+#因为Batch Normalization有一个操作，所以上面的数值效果是能由所替代的,因此我们在使用Batch Norm的时候，可以忽略各隐藏层的常数项。
+#这样在使用梯度下降算法时，只用对?和?进行迭代更新
 
+
+#BasicBlock是为resnet18、34设计的，由于较浅层的结构可以不使用Bottleneck。
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -39,18 +48,18 @@ class BasicBlock(nn.Module):
                  base_width=64, dilation=1, norm_layer=None):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
+            norm_layer = nn.BatchNorm2d #BatchNorm2d最常用于卷积网络中(防止梯度消失或爆炸(不太懂)，设置的参数就是卷积的输出通道数
         if groups != 1 or base_width != 64:
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
+        self.conv1 = conv3x3(inplanes, planes, stride) #卷积操作，输入通道，输出通道，步长
+        self.bn1 = norm_layer(planes)                  #防止梯度爆炸或消失，planes就是卷积一次之后的输出通道数？为什么要对输出的通道数进行防爆
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
+        self.conv2 = conv3x3(planes, planes)           #不懂
+        self.bn2 = norm_layer(planes)             
+        self.downsample = downsample                  
         self.stride = stride
 
     def forward(self, x):
@@ -63,14 +72,16 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        if self.downsample is not None:
+        if self.downsample is not None:  #当连接的维度不同时，使用1*1的卷积核将低维转成高维，然后才能进行相加
             identity = self.downsample(x)
 
-        out += identity
+        out += identity    #实现H(x)=F(x)+x或H(x)=F(x)+Wx
         out = self.relu(out)
 
         return out
-
+#self.downsample = downsample，在默认情况downsample=None，表示不做downsample，但有一个情况需要做，
+#就是一个 BasicBlock的分支x要与output相加时，若x和output的通道数不一样，则要做一个downsample，
+#剧透一下，在resnet里的downsample就是用一个1x1的卷积核处理，变成想要的通道数。为什么要这样做？因为最后要x要和output相加啊， 通道不同相加不了。所以downsample是专门用来改变x的通道数的。
 
 class Bottleneck(nn.Module):
     # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
