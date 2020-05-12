@@ -80,8 +80,9 @@ class BasicBlock(nn.Module):
 
         return out
 #self.downsample = downsample，在默认情况downsample=None，表示不做downsample，但有一个情况需要做，
-#就是一个 BasicBlock的分支x要与output相加时，若x和output的通道数不一样，则要做一个downsample，
-#剧透一下，在resnet里的downsample就是用一个1x1的卷积核处理，变成想要的通道数。为什么要这样做？因为最后要x要和output相加啊， 通道不同相加不了。所以downsample是专门用来改变x的通道数的。
+#就是一个BasicBlock的分支x要与output相加时，若x和output的通道数不一样，则要做一个downsample，
+#在resnet里的downsample就是用一个1x1的卷积核处理，变成想要的通道数。为什么要这样做？因为最后要x要和output相加，通道不同相加不了。
+#所以downsample是专门用来改变x的通道数的。
 
 class Bottleneck(nn.Module):
     # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
@@ -90,7 +91,9 @@ class Bottleneck(nn.Module):
     # This variant is also known as ResNet V1.5 and improves accuracy according to
     # https://ngc.nvidia.com/catalog/model-scripts/nvidia:resnet_50_v1_5_for_pytorch.
 
-    expansion = 4
+#expansion 是对输出通道数的倍乘，注意在基础版本BasicBlock中expansion是1，此时相当于没有倍乘，输出的通道数就等于planes。
+
+    expansion = 4 #一层里面最终输出时四倍膨胀
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None):
@@ -99,9 +102,9 @@ class Bottleneck(nn.Module):
             norm_layer = nn.BatchNorm2d
         width = int(planes * (base_width / 64.)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv1x1(inplanes, width)
+        self.conv1 = conv1x1(inplanes, width)  ##width在这里应该是改变输入的维度
         self.bn1 = norm_layer(width)
-        self.conv2 = conv3x3(width, width, stride, groups, dilation)
+        self.conv2 = conv3x3(width, width, stride, groups, dilation) #输入输出的通道一样
         self.bn2 = norm_layer(width)
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
@@ -110,19 +113,19 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        identity = x
-
+        identity = x  #shotcut
+#1x1卷积
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-
+#3x3卷积
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-
+#1x1 归一
         out = self.conv3(out)
         out = self.bn3(out)
-
+#不管是BasicBlock还是Bottleneck，最后都会做一个判断是否需要给x做downsample，因为必须要把x的通道数变成与主枝的输出的通道一致，才能相加。
         if self.downsample is not None:
             identity = self.downsample(x)
 
@@ -130,7 +133,6 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
-
 
 class ResNet(nn.Module):
 
@@ -140,20 +142,20 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        self._norm_layer = norm_layer
-
+        self._norm_layer = norm_layer  #是因为在make函数中也要用到norm_layer，所以将这个放到了self中
+#设置默认输入通道
         self.inplanes = 64
         self.dilation = 1
-        if replace_stride_with_dilation is None:
+        if replace_stride_with_dilation is None:                              #不懂
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
             replace_stride_with_dilation = [False, False, False]
-        if len(replace_stride_with_dilation) != 3:
+        if len(replace_stride_with_dilation) != 3:                            #不懂
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, #7x7  输入3  输出inplanes
                                bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
@@ -167,7 +169,7 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
+# 对卷积和与BN层初始化，论文中也提到过
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
