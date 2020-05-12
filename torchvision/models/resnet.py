@@ -187,13 +187,16 @@ class ResNet(nn.Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
+#_make_layer 方法的第一个输入参数 block 选择要使用的模块是 BasicBlock 还是 Bottleneck 类;
+#第三个输入参数 blocks 是每个 blocks 中包含多少个 residual 子结构
+    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):#planes参数是“基准通道数”，
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1
+ #如果stride不等于1或者维度不匹配的时候的downsample，可以看到也是用过一个1*1的操作来进行升维的，然后对其进行一次BN操作
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
