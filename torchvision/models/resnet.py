@@ -129,6 +129,7 @@ class Bottleneck(nn.Module):
 #1x1 归一
         out = self.conv3(out)
         out = self.bn3(out)
+
 #不管是BasicBlock还是Bottleneck，最后都会做一个判断是否需要给x做downsample，因为必须要把x的通道数变成与主枝的输出的通道一致，才能相加。
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -150,10 +151,12 @@ class ResNet(nn.Module):
 #设置默认输入通道
         self.inplanes = 64
         self.dilation = 1
+
         if replace_stride_with_dilation is None:                              #不懂
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
             replace_stride_with_dilation = [False, False, False]
+           
         if len(replace_stride_with_dilation) != 3:                            #不懂
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
@@ -173,7 +176,8 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-# 对卷积和与BN层初始化，论文中也提到过
+
+        #不懂这步在干什么？
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -191,9 +195,9 @@ class ResNet(nn.Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
-#_make_layer 方法的第一个输入参数 block 选择要使用的模块是 BasicBlock 还是 Bottleneck 类;
-#第三个输入参数 blocks 是每个 blocks 中包含多少个 residual 子结构
-    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):#planes参数是“基准通道数”，
+#_make_layer 方法的第一个输入参数 block：选择要使用的模块是 BasicBlock 还是 Bottleneck 类;
+#第三个输入参数 blocks：是每个 blocks 中包含多少个 residual 子结构
+    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):   #planes参数是“基准通道数”，
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
@@ -210,8 +214,9 @@ class ResNet(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
                             self.base_width, previous_dilation, norm_layer))
+        #该部分是将每个blocks的第一个residual结构保存在layers列表中
         self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
+        for _ in range(1, blocks):   #该部分是将每个blocks的剩下residual 结构保存在layers列表中，这样就完成了一个blocks的构造
             layers.append(block(self.inplanes, planes, groups=self.groups,
                                 base_width=self.base_width, dilation=self.dilation,
                                 norm_layer=norm_layer))
@@ -224,14 +229,14 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-
+#layer1，2，3，4都是由不同参数的_make_layer()方法得到的
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        x = torch.flatten(x, 1) #展平一个连续范围的维度，输出类型为Tensor；1在这里是start_dim还是end_dim啊
         x = self.fc(x)
 
         return x
